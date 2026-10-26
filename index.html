@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gomerry Shop - Lipa Na M-Pesa</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
+body{background:#eef6ee;padding:10px}
+.header{background:#0a8a00;color:white;text-align:center;padding:16px;border-radius:12px;margin-bottom:12px}
+.header h1{font-size:24px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{background:white;border-radius:12px;padding:14px;text-align:center;box-shadow:0 2px 6px #0001}
+.card .icon{font-size:36px}
+.card h3{font-size:16px;margin:6px 0 2px}
+.card p{color:#555;margin-bottom:8px;font-weight:600}
+.card button{background:#0a8a00;color:white;border:0;padding:10px 0;width:100%;border-radius:20px;font-weight:700;cursor:pointer}
+.cart{background:white;border-radius:12px;padding:14px;margin-top:12px;box-shadow:0 2px 6px #0001}
+.cart h3{margin-bottom:6px}
+.item{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #eee}
+.total{font-size:20px;font-weight:800;margin:12px 0}
+input{width:100%;padding:14px;border:1px solid #ccc;border-radius:10px;margin-bottom:10px;font-size:16px}
+.payBtn{background:#0a8a00;color:white;border:0;padding:16px;width:100%;border-radius:12px;font-size:18px;font-weight:800;cursor:pointer}
+.payBtn:disabled{background:#999}
+.msg{padding:12px;border-radius:10px;margin-top:10px;font-weight:700;text-align:center;display:none}
+.msg.ok{display:block;background:#d4edda;color:#155724}
+.msg.err{display:block;background:#f8d7da;color:#721c24}
+small{color:#666}
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Gomerry Shop</h1>
+<small>Till 4835569 - Lipa Na M-Pesa</small>
+</div>
+
+<div class="grid">
+<div class="card"><div class="icon">🧂</div><h3>Sugar 1kg</h3><p>KES 180</p><button onclick="add('Sugar 1kg',180)">Add</button></div>
+<div class="card"><div class="icon">🫒</div><h3>Oil 1L</h3><p>KES 320</p><button onclick="add('Oil 1L',320)">Add</button></div>
+<div class="card"><div class="icon">🍚</div><h3>Rice 2kg</h3><p>KES 280</p><button onclick="add('Rice 2kg',280)">Add</button></div>
+<div class="card"><div class="icon">🌽</div><h3>Flour 2kg</h3><p>KES 160</p><button onclick="add('Flour 2kg',160)">Add</button></div>
+</div>
+
+<div class="cart">
+<h3>Cart (<span id="count">0</span>)</h3>
+<div id="cartItems"><small>Cart empty</small></div>
+<div class="total">Total: KES <span id="total">0</span></div>
+
+<h3 style="margin:14px 0 8px">Pay with M-Pesa</h3>
+<input id="custName" placeholder="Your Name (e.g. Victor Kiragu)" value="Victor kiragu">
+<input id="phone" type="tel" placeholder="Phone 0718370199" value="0718370199">
+<button id="payBtn" class="payBtn" onclick="pay()">Pay Now via M-Pesa</button>
+<div id="msg" class="msg"></div>
+<small style="display:block;margin-top:10px;text-align:center">You will receive STK popup - Enter PIN to pay</small>
+</div>
+
+<script>
+let cart = [];
+function add(name, price){
+  cart.push({name, price});
+  render();
+}
+function render(){
+  document.getElementById('count').innerText = cart.length;
+  const total = cart.reduce((s,i)=>s+i.price,0);
+  document.getElementById('total').innerText = total;
+  if(cart.length===0){
+    document.getElementById('cartItems').innerHTML='<small>Cart empty</small>';
+  } else {
+    document.getElementById('cartItems').innerHTML = cart.map((it,i)=>`
+      <div class="item"><span>${it.name} - ${it.price}</span><span style="color:red;cursor:pointer" onclick="remove(${i})">x</span></div>
+    `).join('');
+  }
+}
+function remove(i){ cart.splice(i,1); render(); }
+
+async function pay(){
+  const phone = document.getElementById('phone').value.trim();
+  const name = document.getElementById('custName').value.trim();
+  const total = cart.reduce((s,i)=>s+i.price,0);
+  const btn = document.getElementById('payBtn');
+  const msg = document.getElementById('msg');
+
+  if(cart.length===0){ showMsg('Add items to cart first','err'); return; }
+  if(!phone){ showMsg('Enter M-Pesa phone','err'); return; }
+  if(total < 1){ showMsg('Total must be >0','err'); return; }
+
+  btn.disabled=true; btn.innerText='Sending STK... Wait...';
+  msg.className='msg'; msg.style.display='none';
+
+  try{
+    const res = await fetch('/api/stkpush', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ phone, amount: total, name })
+    });
+
+    const raw = await res.text();
+    console.log('RAW:', raw);
+    let data;
+    try{ data = JSON.parse(raw); }catch(e){
+      console.error('Not JSON:', raw);
+      throw new Error('Server returned HTML - check Render logs. Response: '+ raw.substring(0,150));
+    }
+
+    if(!res.ok){
+      throw new Error(data.error || data.details || JSON.stringify(data));
+    }
+
+    if(data.ResponseCode==='0' || data.ResponseCode===0){
+      showMsg('✅ STK Sent! Check your phone for M-Pesa PIN popup! Enter PIN now. CheckoutID: '+(data.CheckoutRequestID||''),'ok');
+      btn.innerText='STK Sent! Check Phone';
+    } else {
+      throw new Error(data.error || data.ResponseDescription || JSON.stringify(data));
+    }
+
+  }catch(err){
+    console.error(err);
+    showMsg('❌ '+ err.message,'err');
+    btn.disabled=false; btn.innerText='Pay Now via M-Pesa';
+    return;
+  }
+  setTimeout(()=>{ btn.disabled=false; btn.innerText='Pay Now via M-Pesa'; }, 15000);
+}
+
+function showMsg(t,type){
+  const m=document.getElementById('msg');
+  m.innerText=t; m.className='msg '+(type==='ok'?'ok':'err'); m.style.display='block';
+}
+</script>
+</body>
+</html>
