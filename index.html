@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GoMerry App - MerryGoRound Fresh</title>
+<style>
+body{font-family:sans-serif;background:#f0fdf4;margin:0;padding:15px}
+.card{background:white;padding:15px;border-radius:12px;margin:10px 0;box-shadow:0 2px 8px #0001}
+.btn{background:#16a34a;color:white;padding:12px 20px;border:none;border-radius:8px;width:100%;font-size:16px}
+input{width:100%;padding:10px;margin:5px 0;border:1px solid #ccc;border-radius:6px;box-sizing:border-box}
+h2{color:#16a34a}
+.price{font-weight:bold;color:#15803d}
+</style>
+</head>
+<body>
+<h2>🛒 MerryGoRound Fresh</h2>
+
+<div class="card">
+<h3>Products</h3>
+<div id="products">Loading...</div>
+</div>
+
+<div class="card">
+<h3>💰 M-Pesa Checkout</h3>
+<input id="pname" placeholder="Your Name">
+<input id="phone" placeholder="M-Pesa Phone 2547...">
+<input id="amount" placeholder="Amount KES" type="number">
+<button class="btn" onclick="pay()">Pay Now via M-Pesa</button>
+<p id="msg"></p>
+</div>
+
+<div class="card">
+<h3>👥 Join Merry-Go-Round</h3>
+<input id="mname" placeholder="Name">
+<input id="mphone" placeholder="Phone">
+<input id="mamount" placeholder="Contribution e.g 1000">
+<button class="btn" onclick="joinMerry()" style="background:#2563eb">Join Chama</button>
+<p id="mmsg"></p>
+<h4>Members</h4>
+<div id="members"></div>
+</div>
+
+<script>
+async function loadProducts(){
+  let res=await fetch('/api/products');
+  let data=await res.json();
+  document.getElementById('products').innerHTML=data.map(p=>`
+    <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee">
+      <span>${p.name}</span><span class="price">KES ${p.price} <button onclick="document.getElementById('amount').value=${p.price}">Buy</button></span>
+    </div>`).join('');
+}
+async function loadMembers(){
+  let res=await fetch('/api/merry');
+  let data=await res.json();
+  document.getElementById('members').innerHTML=data.map(m=>`<div>${m.name} - ${m.amount} KES</div>`).join('') || 'No members yet';
+}
+async function pay(){
+  let body={name:pname.value,phone:phone.value,amount:amount.value};
+  let res=await fetch('/api/mpesa',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  let d=await res.json();
+  document.getElementById('msg').innerText=d.message;
+}
+async function joinMerry(){
+  let body={name:mname.value,phone:mphone.value,amount:mamount.value};
+  let res=await fetch('/api/merry/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  let d=await res.json();
+  document.getElementById('mmsg').innerText=d.message;
+  loadMembers();
+}
+loadProducts(); loadMembers();
+</script>
+</body>
+</html>
